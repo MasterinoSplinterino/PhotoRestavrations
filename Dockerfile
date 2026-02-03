@@ -32,8 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cifs-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Обновляем pip
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+# Обновляем pip и устанавливаем cmake для Python
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel cmake
 
 # Устанавливаем PyTorch с CUDA 11.8
 RUN pip3 install --no-cache-dir \
@@ -42,7 +42,8 @@ RUN pip3 install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cu118
 
 # Устанавливаем dlib (требует cmake и boost)
-RUN pip3 install --no-cache-dir dlib
+# Используем системный cmake вместо pip-версии
+RUN pip3 uninstall -y cmake && pip3 install --no-cache-dir dlib
 
 # Устанавливаем остальные Python зависимости
 RUN pip3 install --no-cache-dir \
