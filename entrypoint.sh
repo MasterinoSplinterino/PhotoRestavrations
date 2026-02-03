@@ -201,35 +201,70 @@ upload_to_smb() {
     fi
 }
 
-# Уменьшение больших изображений для экономии GPU памяти
-resize_large_images() {
-    local max_size="${MAX_IMAGE_SIZE:-1024}"
-    local resized_count=0
-    log_info "Проверка размеров изображений (макс: ${max_size}px)..."
+# Подготовка изображений: копирование в локальную папку и resize
+# Возвращает путь к рабочей директории (локальной копии)
+prepare_images() {
+    local max_size="${MAX_IMAGE_SIZE:-768}"
+    local work_dir="/tmp/photo_input_$$"
+
+    log_info "Подготовка изображений (макс: ${max_size}px)..."
+
+    # Создаём локальную рабочую директорию
+    mkdir -p "$work_dir"
+
+    # Копируем и ресайзим все изображения
+    local count=0
+    local resized=0
 
     while IFS= read -r img; do
         [ -f "$img" ] || continue
+        count=$((count + 1))
 
-        # Получаем размеры
-        dims=$(python3 -c "from PIL import Image; im=Image.open('$img'); print(max(im.size))" 2>/dev/null || echo "0")
+        local basename=$(basename "$img")
+        local dest="$work_dir/$basename"
 
-        if [ -n "$dims" ] && [ "$dims" -gt "$max_size" ]; then
-            log_info "Уменьшение $(basename "$img"): ${dims}px -> ${max_size}px"
-            python3 << PYEOF
+        # Ресайзим при копировании
+        python3 << PYEOF
 from PIL import Image
-im = Image.open('$img')
-im.thumbnail(($max_size, $max_size), Image.LANCZOS)
-# Сохраняем в том же формате
-if im.mode in ('RGBA', 'LA', 'P'):
-    im = im.convert('RGB')
-im.save('$img', quality=95)
-print('Resized successfully')
+import sys
+
+try:
+    im = Image.open('$img')
+    original_size = max(im.size)
+
+    # Конвертируем в RGB если нужно
+    if im.mode in ('RGBA', 'LA', 'P'):
+        im = im.convert('RGB')
+
+    # Ресайзим если больше лимита
+    if original_size > $max_size:
+        im.thumbnail(($max_size, $max_size), Image.LANCZOS)
+        print(f"RESIZED: {original_size} -> {max(im.size)}")
+    else:
+        print(f"OK: {original_size}")
+
+    # Сохраняем как JPEG для экономии места
+    im.save('$dest', 'JPEG', quality=95)
+except Exception as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    sys.exit(1)
 PYEOF
-            resized_count=$((resized_count + 1))
+
+        if [ $? -eq 0 ]; then
+            # Проверяем был ли resize
+            if python3 -c "from PIL import Image; print('RESIZED' if max(Image.open('$img').size) > $max_size else 'OK')" 2>/dev/null | grep -q "RESIZED"; then
+                resized=$((resized + 1))
+            fi
+        else
+            log_warn "Ошибка обработки: $basename"
         fi
+
     done < <(find "$INPUT_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.bmp" \))
 
-    log_info "Уменьшено изображений: $resized_count"
+    log_info "Подготовлено: $count файлов, уменьшено: $resized"
+
+    # Возвращаем путь к рабочей директории
+    echo "$work_dir"
 }
 
 # Основная функция обработки
@@ -245,8 +280,18 @@ process_photos() {
     # Создаём выходную директорию
     mkdir -p "$OUTPUT_DIR"
 
-    # Уменьшаем большие изображения для экономии GPU памяти
-    resize_large_images
+    # Подготавливаем изображения (копируем локально + resize)
+    local work_dir=$(prepare_images)
+    log_info "Рабочая директория: $work_dir"
+
+    # Проверяем что файлы скопированы
+    local file_count=$(find "$work_dir" -type f | wc -l)
+    if [ "$file_count" -eq 0 ]; then
+        log_error "Не удалось подготовить изображения"
+        rm -rf "$work_dir"
+        return 1
+    fi
+    log_info "Файлов в рабочей директории: $file_count"
 
     cd /app
 
@@ -254,14 +299,14 @@ process_photos() {
         "normal")
             log_info "Режим: Без царапин (стандартное восстановление)"
             python run.py \
-                --input_folder "$INPUT_DIR" \
+                --input_folder "$work_dir" \
                 --output_folder "$OUTPUT_DIR" \
                 --GPU "$GPU_ID"
             ;;
         "scratch")
             log_info "Режим: С удалением царапин"
             python run.py \
-                --input_folder "$INPUT_DIR" \
+                --input_folder "$work_dir" \
                 --output_folder "$OUTPUT_DIR" \
                 --GPU "$GPU_ID" \
                 --with_scratch
@@ -269,7 +314,7 @@ process_photos() {
         "scratch_hr")
             log_info "Режим: С удалением царапин + высокое разрешение"
             python run.py \
-                --input_folder "$INPUT_DIR" \
+                --input_folder "$work_dir" \
                 --output_folder "$OUTPUT_DIR" \
                 --GPU "$GPU_ID" \
                 --with_scratch \
@@ -295,6 +340,12 @@ process_photos() {
         fi
     else
         log_warn "Директория final_output не создана. Проверьте логи выше."
+    fi
+
+    # Очищаем временную директорию
+    if [ -n "$work_dir" ] && [ -d "$work_dir" ]; then
+        log_info "Очистка временных файлов..."
+        rm -rf "$work_dir"
     fi
 }
 
