@@ -372,11 +372,11 @@ setup_models() {
     log_info "Проверка и установка моделей..."
 
     # dlib face landmarks
+    # Скрипты ищут файл в текущей директории (Face_Detection), поэтому копируем туда
     if [ -f "$MODELS_DIR/shape_predictor_68_face_landmarks.dat" ]; then
-        if [ ! -f "/app/Face_Detection/shape_predictor/shape_predictor_68_face_landmarks.dat" ]; then
+        if [ ! -f "/app/Face_Detection/shape_predictor_68_face_landmarks.dat" ]; then
             log_info "Копирование dlib модели..."
-            mkdir -p /app/Face_Detection/shape_predictor
-            cp "$MODELS_DIR/shape_predictor_68_face_landmarks.dat" /app/Face_Detection/shape_predictor/
+            cp "$MODELS_DIR/shape_predictor_68_face_landmarks.dat" /app/Face_Detection/
         fi
     else
         log_warn "Модель dlib не найдена в $MODELS_DIR"

@@ -45,8 +45,9 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 uninstall -y cmake && pip3 install --no-cache-dir dlib
 
 # Устанавливаем остальные Python зависимости
+# ВАЖНО: numpy<2 для совместимости с torchvision
 RUN pip3 install --no-cache-dir \
-    numpy \
+    "numpy<2" \
     scikit-image \
     easydict \
     PyYAML \
