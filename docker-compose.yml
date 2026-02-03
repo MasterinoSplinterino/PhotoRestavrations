@@ -22,7 +22,8 @@ services:
       - PROCESSING_MODE=scratch
       - GPU_ID=0
       # Макс. размер изображения (пикселей). Большие будут уменьшены для экономии GPU памяти
-      - MAX_IMAGE_SIZE=2048
+      # Для V100 16GB в scratch режиме рекомендуется 1024-1400
+      - MAX_IMAGE_SIZE=1024
 
       # === Архивация ===
       - ARCHIVE_ENABLED=true

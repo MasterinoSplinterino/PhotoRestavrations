@@ -203,23 +203,33 @@ upload_to_smb() {
 
 # Уменьшение больших изображений для экономии GPU памяти
 resize_large_images() {
-    local max_size="${MAX_IMAGE_SIZE:-2048}"
+    local max_size="${MAX_IMAGE_SIZE:-1024}"
+    local resized_count=0
     log_info "Проверка размеров изображений (макс: ${max_size}px)..."
 
-    find "$INPUT_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.bmp" \) | while read -r img; do
+    while IFS= read -r img; do
+        [ -f "$img" ] || continue
+
         # Получаем размеры
-        dims=$(python3 -c "from PIL import Image; im=Image.open('$img'); print(max(im.size))" 2>/dev/null)
+        dims=$(python3 -c "from PIL import Image; im=Image.open('$img'); print(max(im.size))" 2>/dev/null || echo "0")
 
         if [ -n "$dims" ] && [ "$dims" -gt "$max_size" ]; then
             log_info "Уменьшение $(basename "$img"): ${dims}px -> ${max_size}px"
-            python3 -c "
+            python3 << PYEOF
 from PIL import Image
 im = Image.open('$img')
 im.thumbnail(($max_size, $max_size), Image.LANCZOS)
+# Сохраняем в том же формате
+if im.mode in ('RGBA', 'LA', 'P'):
+    im = im.convert('RGB')
 im.save('$img', quality=95)
-" 2>/dev/null
+print('Resized successfully')
+PYEOF
+            resized_count=$((resized_count + 1))
         fi
-    done
+    done < <(find "$INPUT_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.bmp" \))
+
+    log_info "Уменьшено изображений: $resized_count"
 }
 
 # Основная функция обработки
@@ -235,10 +245,8 @@ process_photos() {
     # Создаём выходную директорию
     mkdir -p "$OUTPUT_DIR"
 
-    # Уменьшаем большие изображения для scratch режима
-    if [ "$PROCESSING_MODE" = "scratch" ] || [ "$PROCESSING_MODE" = "scratch_hr" ]; then
-        resize_large_images
-    fi
+    # Уменьшаем большие изображения для экономии GPU памяти
+    resize_large_images
 
     cd /app
 
