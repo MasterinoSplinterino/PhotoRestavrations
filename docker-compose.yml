@@ -8,14 +8,8 @@ services:
     image: photo-restoration:latest
     container_name: photo-restoration
 
-    # GPU passthrough для Dokploy/Docker
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1  # Tesla V100
-              capabilities: [gpu]
+    # GPU passthrough - альтернативный способ через runtime
+    runtime: nvidia
 
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
