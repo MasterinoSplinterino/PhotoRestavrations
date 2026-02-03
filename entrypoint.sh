@@ -206,9 +206,7 @@ resize_large_images() {
     local max_size="${MAX_IMAGE_SIZE:-2048}"
     log_info "Проверка размеров изображений (макс: ${max_size}px)..."
 
-    for img in "$INPUT_DIR"/*.{jpg,jpeg,png,bmp,JPG,JPEG,PNG,BMP} 2>/dev/null; do
-        [ -f "$img" ] || continue
-
+    find "$INPUT_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.bmp" \) | while read -r img; do
         # Получаем размеры
         dims=$(python3 -c "from PIL import Image; im=Image.open('$img'); print(max(im.size))" 2>/dev/null)
 
