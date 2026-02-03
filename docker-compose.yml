@@ -19,7 +19,7 @@ services:
       # normal    - без царапин
       # scratch   - с удалением царапин
       # scratch_hr - высокое разрешение + царапины
-      - PROCESSING_MODE=normal
+      - PROCESSING_MODE=scratch
       - GPU_ID=0
 
       # === Архивация ===

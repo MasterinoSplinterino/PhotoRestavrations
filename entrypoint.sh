@@ -405,6 +405,15 @@ setup_models() {
     fi
 
     cd /app
+
+    # Патч для NumPy совместимости в align_warp_back_multiple_dlib.py
+    # Исправляем строку: mask *= 255.0 -> mask = (mask * 255.0).astype(np.uint8)
+    DLIB_FILE="/app/Face_Detection/align_warp_back_multiple_dlib.py"
+    if [ -f "$DLIB_FILE" ] && grep -q "mask \*= 255.0" "$DLIB_FILE"; then
+        log_info "Применение патча для NumPy совместимости..."
+        sed -i 's/mask \*= 255\.0/mask = (mask.astype(np.float64) * 255.0).astype(np.uint8)/g' "$DLIB_FILE"
+    fi
+
     log_info "Модели установлены"
 }
 
