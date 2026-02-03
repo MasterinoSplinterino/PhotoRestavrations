@@ -76,24 +76,28 @@ RUN git clone https://github.com/vacancy/Synchronized-BatchNorm-PyTorch.git \
 # Скачиваем модель детектора лиц dlib
 RUN mkdir -p Face_Detection/shape_predictor && \
     cd Face_Detection/shape_predictor && \
-    wget -q http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2 && \
+    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
+    http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2 && \
     bzip2 -d shape_predictor_68_face_landmarks.dat.bz2
 
-# Скачиваем чекпоинты Face_Enhancement
+# Скачиваем чекпоинты Face_Enhancement (с retry и прогрессом)
 RUN cd Face_Enhancement && \
-    wget -q https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/face_checkpoints.zip && \
+    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
+    https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/face_checkpoints.zip && \
     unzip -q face_checkpoints.zip && \
     rm face_checkpoints.zip
 
 # Скачиваем чекпоинты Global
 RUN cd Global && \
-    wget -q https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/global_checkpoints.zip && \
+    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
+    https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/global_checkpoints.zip && \
     unzip -q global_checkpoints.zip && \
     rm global_checkpoints.zip
 
-# Скачиваем чекпоинты для детекции царапин (опционально, но нужно для --with_scratch)
+# Скачиваем чекпоинты для детекции царапин (нужно для --with_scratch)
 RUN cd Global && \
-    wget -q https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/detection_checkpoints.zip && \
+    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
+    https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/detection_checkpoints.zip && \
     unzip -q detection_checkpoints.zip && \
     rm detection_checkpoints.zip
 
