@@ -202,15 +202,15 @@ upload_to_smb() {
 }
 
 # Подготовка изображений: копирование в локальную папку и resize
-# Возвращает путь к рабочей директории (локальной копии)
+# Записывает путь к рабочей директории в глобальную переменную WORK_DIR
 prepare_images() {
     local max_size="${MAX_IMAGE_SIZE:-768}"
-    local work_dir="/tmp/photo_input_$$"
+    WORK_DIR="/tmp/photo_input_$$"
 
     log_info "Подготовка изображений (макс: ${max_size}px)..."
 
     # Создаём локальную рабочую директорию
-    mkdir -p "$work_dir"
+    mkdir -p "$WORK_DIR"
 
     # Копируем и ресайзим все изображения
     local count=0
@@ -221,10 +221,10 @@ prepare_images() {
         count=$((count + 1))
 
         local basename=$(basename "$img")
-        local dest="$work_dir/$basename"
+        local dest="$WORK_DIR/$basename"
 
         # Ресайзим при копировании
-        python3 << PYEOF
+        local resize_result=$(python3 << PYEOF
 from PIL import Image
 import sys
 
@@ -239,21 +239,21 @@ try:
     # Ресайзим если больше лимита
     if original_size > $max_size:
         im.thumbnail(($max_size, $max_size), Image.LANCZOS)
-        print(f"RESIZED: {original_size} -> {max(im.size)}")
+        print(f"RESIZED:{original_size}->{max(im.size)}")
     else:
-        print(f"OK: {original_size}")
+        print(f"OK:{original_size}")
 
     # Сохраняем как JPEG для экономии места
     im.save('$dest', 'JPEG', quality=95)
 except Exception as e:
-    print(f"ERROR: {e}", file=sys.stderr)
+    print(f"ERROR:{e}", file=sys.stderr)
     sys.exit(1)
 PYEOF
-
+)
         if [ $? -eq 0 ]; then
-            # Проверяем был ли resize
-            if python3 -c "from PIL import Image; print('RESIZED' if max(Image.open('$img').size) > $max_size else 'OK')" 2>/dev/null | grep -q "RESIZED"; then
+            if echo "$resize_result" | grep -q "^RESIZED:"; then
                 resized=$((resized + 1))
+                log_info "Уменьшено: $basename ($resize_result)"
             fi
         else
             log_warn "Ошибка обработки: $basename"
@@ -262,9 +262,6 @@ PYEOF
     done < <(find "$INPUT_DIR" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" -o -iname "*.bmp" \))
 
     log_info "Подготовлено: $count файлов, уменьшено: $resized"
-
-    # Возвращаем путь к рабочей директории
-    echo "$work_dir"
 }
 
 # Основная функция обработки
@@ -281,14 +278,14 @@ process_photos() {
     mkdir -p "$OUTPUT_DIR"
 
     # Подготавливаем изображения (копируем локально + resize)
-    local work_dir=$(prepare_images)
-    log_info "Рабочая директория: $work_dir"
+    prepare_images
+    log_info "Рабочая директория: $WORK_DIR"
 
     # Проверяем что файлы скопированы
-    local file_count=$(find "$work_dir" -type f | wc -l)
+    local file_count=$(find "$WORK_DIR" -type f | wc -l)
     if [ "$file_count" -eq 0 ]; then
         log_error "Не удалось подготовить изображения"
-        rm -rf "$work_dir"
+        rm -rf "$WORK_DIR"
         return 1
     fi
     log_info "Файлов в рабочей директории: $file_count"
@@ -299,14 +296,14 @@ process_photos() {
         "normal")
             log_info "Режим: Без царапин (стандартное восстановление)"
             python run.py \
-                --input_folder "$work_dir" \
+                --input_folder "$WORK_DIR" \
                 --output_folder "$OUTPUT_DIR" \
                 --GPU "$GPU_ID"
             ;;
         "scratch")
             log_info "Режим: С удалением царапин"
             python run.py \
-                --input_folder "$work_dir" \
+                --input_folder "$WORK_DIR" \
                 --output_folder "$OUTPUT_DIR" \
                 --GPU "$GPU_ID" \
                 --with_scratch
@@ -314,7 +311,7 @@ process_photos() {
         "scratch_hr")
             log_info "Режим: С удалением царапин + высокое разрешение"
             python run.py \
-                --input_folder "$work_dir" \
+                --input_folder "$WORK_DIR" \
                 --output_folder "$OUTPUT_DIR" \
                 --GPU "$GPU_ID" \
                 --with_scratch \
@@ -343,9 +340,9 @@ process_photos() {
     fi
 
     # Очищаем временную директорию
-    if [ -n "$work_dir" ] && [ -d "$work_dir" ]; then
+    if [ -n "$WORK_DIR" ] && [ -d "$WORK_DIR" ]; then
         log_info "Очистка временных файлов..."
-        rm -rf "$work_dir"
+        rm -rf "$WORK_DIR"
     fi
 }
 
