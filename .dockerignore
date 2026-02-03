@@ -1,0 +1,25 @@
+# Игнорируем локальные папки с данными
+input/
+output/
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Документация (не нужна в образе)
+*.md
+!README.md
+
+# Логи
+*.log
+logs/

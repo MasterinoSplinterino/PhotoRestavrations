@@ -1,0 +1,91 @@
+version: "3.8"
+
+services:
+  photo-restoration:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: photo-restoration:latest
+    container_name: photo-restoration
+
+    # GPU passthrough для Dokploy/Docker
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1  # Tesla V100
+              capabilities: [gpu]
+
+    # Привилегии для монтирования SMB (если используется)
+    cap_add:
+      - SYS_ADMIN
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+      # === Режим обработки ===
+      # normal    - без царапин
+      # scratch   - с удалением царапин
+      # scratch_hr - высокое разрешение + царапины
+      - PROCESSING_MODE=normal
+      - GPU_ID=0
+
+      # === Watch mode (постоянная работа) ===
+      # - WATCH_MODE=true
+      # - WATCH_INTERVAL=30
+
+      # === Архивация ===
+      - ARCHIVE_ENABLED=true
+      - ARCHIVE_FORMAT=zip
+
+      # === SMB выгрузка (гостевой доступ, без пароля) ===
+      # Раскомментируй если хочешь выгружать напрямую из контейнера
+      # - SMB_ENABLED=true
+      # - SMB_HOST=10.0.0.1                           # IP Proxmox из VM
+      # - SMB_SHARE=proxmox/photo_restoration/output  # Путь внутри шары
+
+    # === VOLUMES ===
+    # Вариант 1: Локальные папки (для тестирования)
+    volumes:
+      - ./input:/data/input
+      - ./output:/data/output
+
+    # Вариант 2: Через примонтированную SMB-шару на VM (РЕКОМЕНДУЕТСЯ)
+    # Сначала на VM: mount -t cifs //PROXMOX_IP/proxmox /mnt/proxmox -o guest
+    # volumes:
+    #   - /mnt/proxmox/photo_restoration/input:/data/input
+    #   - /mnt/proxmox/photo_restoration/output:/data/output
+
+    restart: "no"
+    # Для постоянной работы: restart: always + WATCH_MODE=true
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# =============================================================================
+# ИНСТРУКЦИЯ ДЛЯ DOKPLOY:
+# =============================================================================
+#
+# 1. На Proxmox настрой Samba (см. PROXMOX_SAMBA_SETUP.md)
+#    Копипаста: выполни скрипт из раздела "Быстрый старт"
+#
+# 2. На VM примонтируй общую папку:
+#    mkdir -p /mnt/proxmox
+#    mount -t cifs //PROXMOX_IP/proxmox /mnt/proxmox -o guest
+#
+# 3. Добавь в /etc/fstab для автомонтирования:
+#    //PROXMOX_IP/proxmox /mnt/proxmox cifs guest,_netdev,nofail 0 0
+#
+# 4. В Dokploy создай Docker Compose сервис, укажи volumes:
+#    - /mnt/proxmox/photo_restoration/input:/data/input
+#    - /mnt/proxmox/photo_restoration/output:/data/output
+#
+# 5. Включи GPU в настройках сервиса Dokploy
+#
+# 6. Кладёшь фото в \\PROXMOX_IP\proxmox\photo_restoration\input
+#    Забираешь результаты из \\PROXMOX_IP\proxmox\photo_restoration\output
