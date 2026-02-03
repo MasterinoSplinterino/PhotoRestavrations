@@ -1,5 +1,6 @@
 # Dockerfile для Microsoft Bringing-Old-Photos-Back-to-Life
 # Обновлённая версия с CUDA 11.8 для совместимости с современными GPU
+# Модели загружаются из внешнего volume при запуске
 
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
@@ -28,7 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender-dev \
     libgtk2.0-dev \
     libboost-all-dev \
-    # Для монтирования SMB
     cifs-utils \
     && rm -rf /var/lib/apt/lists/*
 
@@ -42,7 +42,6 @@ RUN pip3 install --no-cache-dir \
     --extra-index-url https://download.pytorch.org/whl/cu118
 
 # Устанавливаем dlib (требует cmake и boost)
-# Используем системный cmake вместо pip-версии
 RUN pip3 uninstall -y cmake && pip3 install --no-cache-dir dlib
 
 # Устанавливаем остальные Python зависимости
@@ -73,36 +72,13 @@ RUN git clone https://github.com/vacancy/Synchronized-BatchNorm-PyTorch.git \
     && cp -r Synchronized-BatchNorm-PyTorch/sync_batchnorm Global/detection_models/ \
     && rm -rf Synchronized-BatchNorm-PyTorch
 
-# Скачиваем модель детектора лиц dlib
-RUN mkdir -p Face_Detection/shape_predictor && \
-    cd Face_Detection/shape_predictor && \
-    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
-    http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2 && \
-    bzip2 -d shape_predictor_68_face_landmarks.dat.bz2
-
-# Скачиваем чекпоинты Face_Enhancement (с retry и прогрессом)
-RUN cd Face_Enhancement && \
-    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
-    https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/face_checkpoints.zip && \
-    unzip -q face_checkpoints.zip && \
-    rm face_checkpoints.zip
-
-# Скачиваем чекпоинты Global
-RUN cd Global && \
-    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
-    https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/global_checkpoints.zip && \
-    unzip -q global_checkpoints.zip && \
-    rm global_checkpoints.zip
-
-# Скачиваем чекпоинты для детекции царапин (нужно для --with_scratch)
-RUN cd Global && \
-    wget --tries=3 --timeout=60 --progress=bar:force:noscroll \
-    https://github.com/microsoft/Bringing-Old-Photos-Back-to-Life/releases/download/v1.0/detection_checkpoints.zip && \
-    unzip -q detection_checkpoints.zip && \
-    rm detection_checkpoints.zip
+# Создаём директории для моделей (будут заполнены из volume при запуске)
+RUN mkdir -p Face_Detection/shape_predictor \
+    && mkdir -p Face_Enhancement/checkpoints \
+    && mkdir -p Global/checkpoints
 
 # Создаём директории для input/output
-RUN mkdir -p /data/input /data/output
+RUN mkdir -p /data/input /data/output /data/models
 
 # Копируем entrypoint скрипт
 COPY entrypoint.sh /app/entrypoint.sh
@@ -112,7 +88,6 @@ RUN chmod +x /app/entrypoint.sh
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-# Порт не нужен для batch processing, но можно добавить health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import torch; assert torch.cuda.is_available()" || exit 1
 

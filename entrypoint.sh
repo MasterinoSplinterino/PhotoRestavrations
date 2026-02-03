@@ -26,6 +26,9 @@ SMB_MOUNT="/mnt/smb"
 ARCHIVE_ENABLED="${ARCHIVE_ENABLED:-true}"
 ARCHIVE_FORMAT="${ARCHIVE_FORMAT:-zip}"  # zip или tar.gz
 
+# Путь к моделям (volume)
+MODELS_DIR="${MODELS_DIR:-/data/models}"
+
 # Цвета для вывода
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -363,6 +366,50 @@ fi
 log_info "========================================"
 log_info "Photo Restoration Service Starting"
 log_info "========================================"
+
+# Установка моделей из volume
+setup_models() {
+    log_info "Проверка и установка моделей..."
+
+    # dlib face landmarks
+    if [ -f "$MODELS_DIR/shape_predictor_68_face_landmarks.dat" ]; then
+        if [ ! -f "/app/Face_Detection/shape_predictor/shape_predictor_68_face_landmarks.dat" ]; then
+            log_info "Копирование dlib модели..."
+            mkdir -p /app/Face_Detection/shape_predictor
+            cp "$MODELS_DIR/shape_predictor_68_face_landmarks.dat" /app/Face_Detection/shape_predictor/
+        fi
+    else
+        log_warn "Модель dlib не найдена в $MODELS_DIR"
+    fi
+
+    # Face checkpoints
+    if [ -f "$MODELS_DIR/face_checkpoints.zip" ]; then
+        if [ ! -d "/app/Face_Enhancement/checkpoints/Setting_9_epoch_100" ]; then
+            log_info "Распаковка face_checkpoints..."
+            cd /app/Face_Enhancement
+            unzip -q "$MODELS_DIR/face_checkpoints.zip"
+        fi
+    else
+        log_warn "face_checkpoints.zip не найден в $MODELS_DIR"
+    fi
+
+    # Global checkpoints
+    if [ -f "$MODELS_DIR/global_checkpoints.zip" ]; then
+        if [ ! -d "/app/Global/checkpoints/detection" ]; then
+            log_info "Распаковка global_checkpoints..."
+            cd /app/Global
+            unzip -q "$MODELS_DIR/global_checkpoints.zip"
+        fi
+    else
+        log_warn "global_checkpoints.zip не найден в $MODELS_DIR"
+    fi
+
+    cd /app
+    log_info "Модели установлены"
+}
+
+# Устанавливаем модели
+setup_models
 
 # Проверяем GPU
 if ! check_gpu; then
