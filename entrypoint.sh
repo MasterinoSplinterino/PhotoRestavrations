@@ -201,6 +201,29 @@ upload_to_smb() {
     fi
 }
 
+# Уменьшение больших изображений для экономии GPU памяти
+resize_large_images() {
+    local max_size="${MAX_IMAGE_SIZE:-2048}"
+    log_info "Проверка размеров изображений (макс: ${max_size}px)..."
+
+    for img in "$INPUT_DIR"/*.{jpg,jpeg,png,bmp,JPG,JPEG,PNG,BMP} 2>/dev/null; do
+        [ -f "$img" ] || continue
+
+        # Получаем размеры
+        dims=$(python3 -c "from PIL import Image; im=Image.open('$img'); print(max(im.size))" 2>/dev/null)
+
+        if [ -n "$dims" ] && [ "$dims" -gt "$max_size" ]; then
+            log_info "Уменьшение $(basename "$img"): ${dims}px -> ${max_size}px"
+            python3 -c "
+from PIL import Image
+im = Image.open('$img')
+im.thumbnail(($max_size, $max_size), Image.LANCZOS)
+im.save('$img', quality=95)
+" 2>/dev/null
+        fi
+    done
+}
+
 # Основная функция обработки
 process_photos() {
     local batch_id="${1:-$(date +%Y%m%d_%H%M%S)}"
@@ -213,6 +236,11 @@ process_photos() {
 
     # Создаём выходную директорию
     mkdir -p "$OUTPUT_DIR"
+
+    # Уменьшаем большие изображения для scratch режима
+    if [ "$PROCESSING_MODE" = "scratch" ] || [ "$PROCESSING_MODE" = "scratch_hr" ]; then
+        resize_large_images
+    fi
 
     cd /app
 

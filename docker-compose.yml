@@ -21,6 +21,8 @@ services:
       # scratch_hr - высокое разрешение + царапины
       - PROCESSING_MODE=scratch
       - GPU_ID=0
+      # Макс. размер изображения (пикселей). Большие будут уменьшены для экономии GPU памяти
+      - MAX_IMAGE_SIZE=2048
 
       # === Архивация ===
       - ARCHIVE_ENABLED=true
